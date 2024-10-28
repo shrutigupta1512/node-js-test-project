@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog Creation App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+        #blogContainer {
+            display: flex;
+            width: 80%;
+            justify-content: space-between;
+        }
+        #formContainer {
+            background-color: #007BFF;
+            color: white;
+            padding: 20px;
+            border-radius: 5px;
+            width: 40%;
+        }
+        #blogList {
+            width: 55%;
+        }
+        h1, h2 {
+            color: yellow;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            background-color: white;
+        }
+        button {
+            background-color: orange;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .blog-post {
+            background-color: #007BFF;
+            color: white;
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="blogContainer">
+        <div id="formContainer">
+            <h1>Create a New Blog Post</h1>
+            <form id="blogForm">
+                <label for="title">Blog Title:</label><br>
+                <input type="text" id="title" required><br>
+                <label for="author">Blog Author:</label><br>
+                <input type="text" id="author" required><br>
+                <label for="content">Blog Content:</label><br>
+                <textarea id="content" required></textarea><br>
+                <button type="submit">Submit</button>
+            </form>
+            <p id="responseMessage"></p>
+        </div>
+        <div id="blogList"></div>
+    </div>
+
+    <script>
+        document.getElementById('blogForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const title = document.getElementById('title').value;
+            const author = document.getElementById('author').value;
+            const content = document.getElementById('content').value;
+
+            fetch('/api/blogs', {  
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ title, author, content })
+            })
+            .then(response => {
+                if (response.ok) {
+                    document.getElementById('responseMessage').innerText = 'Blog post created successfully!';
+                    loadBlogs(); // Refresh the blog list
+                } else {
+                    document.getElementById('responseMessage').innerText = 'Error creating blog post.';
+                }
+            });
+
+            // Clear the form
+            document.getElementById('blogForm').reset();
+        });
+
+        // Function to load blogs from the server
+        function loadBlogs() {
+            fetch('/api/blogs')  
+                .then(response => response.json())
+                .then(blogs => {
+                    const blogList = document.getElementById('blogList');
+                    blogList.innerHTML = ''; 
+                    blogs.forEach(blog => {
+                        const blogPost = document.createElement('div');
+                        blogPost.className = 'blog-post';
+                        blogPost.innerHTML = `
+                            <h3>${blog.title} <button onclick="toggleContent(${blog.id})">+</button></h3>
+                            <div class="blog-content" id="content-${blog.id}" style="display: none;">
+                                <p><strong>Author:</strong> ${blog.author}</p>
+                                <p>${blog.content}</p>
+                                <h4>Comments:</h4>
+                                <textarea id="comment-${blog.id}" placeholder="Write a comment..."></textarea>
+                                <button onclick="addComment(${blog.id})">➡</button>
+                                <div id="comments-${blog.id}"></div>
+                            </div>
+                        `;
+                        blogList.appendChild(blogPost);
+                        loadComments(blog.id); // Load existing comments
+                    });
+                });
+        }
+
+        // Function to load comments for a specific blog post
+        function loadComments(blogId) {
+            fetch(`http://localhost:3000/comments/${blogId}`) // Use full URL with port
+                .then(response => response.json())
+                .then(comments => {
+                    const commentsDiv = document.getElementById(`comments-${blogId}`);
+                    commentsDiv.innerHTML = ''; 
+                    comments.forEach(comment => {
+                        const commentDiv = document.createElement('div');
+                        commentDiv.innerHTML = `
+                            <p>${comment.content} <button onclick="deleteComment(${comment.id})">Delete</button></p>
+                        `;
+                        commentsDiv.appendChild(commentDiv);
+                    });
+                });
+        }
+
+        // Function to add a comment
+        function addComment(blogId) {
+            const comment = document.getElementById(`comment-${blogId}`).value.trim(); // Ensure no whitespace
+
+            if (!comment) {
+                alert('Comment cannot be empty.'); // Alert if comment is empty
+                return;
+            }
+
+            fetch('/add-comment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ blogId, content: comment })
+            })
+            .then(response => {
+                if (response.ok) {
+                    document.getElementById(`comment-${blogId}`).value = ''; // Clear the input
+                    loadComments(blogId); // Refresh comments
+                } else {
+                    console.error('Failed to add comment:', response.statusText); // Log response status text
+                    alert('Error adding comment: ' + response.statusText);
+                }
+            })
+            .catch(err => {
+                console.error('Fetch error:', err); // Log fetch errors
+                alert('Error adding comment. Please try again later.');
+            });
+        }
+
+        // Function to delete a comment
+        function deleteComment(commentId) {
+            fetch(`/delete-comment/${commentId}`, { method: 'DELETE' })
+                .then(response => {
+                    if (response.ok) {
+                        loadBlogs(); // Refresh the blog list
+                    } else {
+                        alert('Error deleting comment.');
+                    }
+                });
+        }
+
+        // Toggle blog content display
+        function toggleContent(blogId) {
+            const contentDiv = document.getElementById(`content-${blogId}`);
+            contentDiv.style.display = contentDiv.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // Load blogs on initial page load
+        loadBlogs();
+    </script>
+</body>
+</html>
